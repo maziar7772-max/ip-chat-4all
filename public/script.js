@@ -1,25 +1,17 @@
-// public/script.js
-// =============================================
-// IP Chat Name - Frontend Logic
-// Beginner-friendly + heavily commented
-// =============================================
-
+// public/script.js - Secure version with media support
 let socket;
 let currentRoomId = null;
 let myNickname = '';
-let myIP = '';
 let participants = [];
 let messages = [];
+let mediaRecorder = null;
+let audioChunks = [];
 
-// Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('%c🚀 IP Chat Name frontend started!', 'color:#00f0ff; font-size:18px;');
-
     socket = io();
 
     setupSocketListeners();
 
-    // Check if user opened a direct room link (e.g. ?room=ABC12345)
     const params = new URLSearchParams(window.location.search);
     if (params.has('room')) {
         currentRoomId = params.get('room').toUpperCase();
@@ -28,32 +20,23 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupSocketListeners() {
-    socket.on('connect', () => console.log('✅ Socket connected'));
-
     socket.on('room-joined', (data) => {
         currentRoomId = data.roomId;
         myNickname = data.myNickname;
-        myIP = data.myIP;
         participants = data.users;
         messages = data.messages || [];
 
         history.pushState({}, '', `?room=${currentRoomId}`);
-
         switchToChatView();
         renderParticipants();
         renderMessages();
-
-        if (participants.length === 2) {
-            document.getElementById('waiting-banner').classList.add('hidden');
-        }
-        showToast('✅ Connected to room!', 2500);
+        if (participants.length === 2) document.getElementById('waiting-banner').classList.add('hidden');
     });
 
     socket.on('user-joined', (data) => {
         participants = data.users;
         renderParticipants();
         document.getElementById('waiting-banner').classList.add('hidden');
-        showToast(`${data.nickname} joined from ${data.ip}`, 3000);
     });
 
     socket.on('receive-message', (msg) => {
@@ -64,49 +47,42 @@ function setupSocketListeners() {
     });
 
     socket.on('room-closed', (data) => {
-        showClosedModal(data.reason || 'The other user left. Room permanently deleted.');
+        showClosedModal(data.reason);
     });
 
     socket.on('room-error', (data) => {
-        showToast(`❌ ${data.msg}`, 4000);
-        const modal = document.getElementById('join-modal');
-        if (modal && !modal.classList.contains('hidden')) modal.classList.add('hidden');
+        showToast(`❌ ${data.msg}`);
     });
 }
 
 function createRoom() {
     const nickname = document.getElementById('nickname-input').value.trim();
-    if (!nickname) return showToast('Please enter a nickname!', 3000);
-    myNickname = nickname;
+    if (!nickname) return showToast('Please enter a nickname');
     socket.emit('create-room', { nickname });
 }
 
 function joinRoomFromHome() {
     const roomId = document.getElementById('room-code-input').value.trim().toUpperCase();
     const nickname = document.getElementById('nickname-input').value.trim();
-    if (!roomId || roomId.length < 6) return showToast('Enter a valid Room ID', 3000);
-    if (!nickname) return showToast('Please enter a nickname!', 3000);
-    myNickname = nickname;
+    if (!roomId) return showToast('Enter Room ID');
+    if (!nickname) return showToast('Enter nickname');
     currentRoomId = roomId;
     socket.emit('join-room', { roomId, nickname });
 }
 
 function showJoinModal() {
-    const modal = document.getElementById('join-modal');
     document.getElementById('modal-room-id').textContent = currentRoomId;
-    modal.classList.remove('hidden');
-    setTimeout(() => document.getElementById('modal-nickname').focus(), 300);
+    document.getElementById('join-modal').classList.remove('hidden');
 }
 
 function confirmJoinFromModal() {
-    myNickname = document.getElementById('modal-nickname').value.trim() || 'Anonymous';
+    const nickname = document.getElementById('modal-nickname').value.trim() || 'Anonymous';
     document.getElementById('join-modal').classList.add('hidden');
-    socket.emit('join-room', { roomId: currentRoomId, nickname: myNickname });
+    socket.emit('join-room', { roomId: currentRoomId, nickname });
 }
 
 function cancelJoinModal() {
     document.getElementById('join-modal').classList.add('hidden');
-    currentRoomId = null;
 }
 
 function switchToChatView() {
@@ -127,16 +103,12 @@ function renderParticipants() {
         div.className = `participant ${isMe ? 'me' : ''}`;
         div.innerHTML = `
             <div class="participant-info">
-                <div class="participant-name">${isMe ? '👤 You' : '👤 ' + user.nickname}</div>
+                <div class="participant-name">${isMe ? '👤 You' : user.nickname}</div>
                 <div class="participant-ip">IP: ${user.ip}</div>
             </div>
         `;
         container.appendChild(div);
     });
-
-    if (participants.length === 1) {
-        document.getElementById('waiting-banner').classList.remove('hidden');
-    }
 }
 
 function renderMessages() {
@@ -150,14 +122,23 @@ function renderMessages() {
         const isMine = msg.sender === myNickname;
         const div = document.createElement('div');
         div.className = `message ${isMine ? 'you' : 'other'}`;
-        div.innerHTML = `
-            <div class="message-header">
-                <span class="message-sender">${isMine ? 'You' : msg.sender}</span>
-                <span class="message-ip">• ${msg.ip}</span>
-                <span class="message-time">${msg.time}</span>
-            </div>
-            <div>${msg.text}</div>
-        `;
+
+        let content = `<div class="message-header">
+            <span class="message-sender">${isMine ? 'You' : msg.sender}</span>
+            <span class="message-ip">• ${msg.ip}</span>
+            <span class="message-time">${msg.time}</span>
+        </div>`;
+
+        if (msg.text) content += `<div>${msg.text}</div>`;
+        if (msg.fileUrl) {
+            if (msg.fileType === 'image') {
+                content += `<img src="${msg.fileUrl}" class="chat-image">`;
+            } else {
+                content += `<audio controls src="${msg.fileUrl}" class="chat-audio"></audio>`;
+            }
+        }
+
+        div.innerHTML = content;
         container.appendChild(div);
     });
 
@@ -168,20 +149,94 @@ function sendMessage(e) {
     e.preventDefault();
     const input = document.getElementById('message-input');
     const text = input.value.trim();
-    if (!text || !currentRoomId) return;
-    socket.emit('send-message', { text });
-    input.value = '';
+    if (text) {
+        socket.emit('send-message', { text });
+        input.value = '';
+    }
 }
 
+function triggerImageUpload() {
+    document.getElementById('file-upload').click();
+}
+
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            socket.emit('send-message', {
+                text: '',
+                fileUrl: data.url,
+                fileType: data.type
+            });
+        }
+    })
+    .catch(() => showToast('Upload failed'));
+}
+
+async function startVoiceRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'voice.ogg');
+
+            fetch('/upload', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        socket.emit('send-message', {
+                            text: '',
+                            fileUrl: data.url,
+                            fileType: 'audio'
+                        });
+                    }
+                });
+            stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorder.start();
+        showToast('🎤 Recording... Click again to stop', 15000);
+
+        // Auto stop after 30 seconds for safety
+        setTimeout(() => {
+            if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+        }, 30000);
+
+    } catch (err) {
+        showToast('Microphone access denied or not available');
+    }
+}
+
+// Click again to stop recording (simple toggle)
+document.addEventListener('click', (e) => {
+    if (e.target.textContent.includes('🎤') && mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+    }
+});
+
 function copyRoomLink() {
-    const link = `${window.location.origin}?room=${currentRoomId}`;
-    navigator.clipboard.writeText(link).then(() => showToast('✅ Link copied!', 2500));
+    const link = `\( {window.location.origin}?room= \){currentRoomId}`;
+    navigator.clipboard.writeText(link).then(() => showToast('✅ Link copied!'));
 }
 
 function showClosedModal(reason) {
-    const modal = document.getElementById('closed-modal');
-    document.getElementById('closed-reason').innerHTML = `${reason}<br><br><small>This room ID can never be used again.</small>`;
-    modal.classList.remove('hidden');
+    document.getElementById('closed-reason').innerHTML = reason || 'Room has been permanently deleted.';
+    document.getElementById('closed-modal').classList.remove('hidden');
 }
 
 function goBackToHome() {
@@ -190,13 +245,11 @@ function goBackToHome() {
     document.getElementById('home-view').classList.remove('hidden');
     document.getElementById('header-room-info').classList.add('hidden');
     currentRoomId = null;
-    participants = [];
-    messages = [];
 }
 
-function showToast(message, timeout = 3000) {
+function showToast(msg, timeout = 3000) {
     const toast = document.getElementById('toast');
-    toast.textContent = message;
+    toast.textContent = msg;
     toast.classList.remove('hidden');
     setTimeout(() => toast.classList.add('hidden'), timeout);
-          }
+}
