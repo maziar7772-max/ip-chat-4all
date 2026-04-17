@@ -1,7 +1,7 @@
 {
   "name": "ip-chat-name",
   "version": "2.2.0",
-  "description": "Secure real-time chat with groups, expiry, typing, seen status, dark/light mode",
+  "description": "Secure chat with groups, expiry, typing, seen, dark/light mode",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
