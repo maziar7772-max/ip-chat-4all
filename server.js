@@ -12,7 +12,7 @@ const app = express();
 const server = http.createServer(app);
 
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(rateLimit({ windowMs: 60*1000, max: 40 }));
+app.use(rateLimit({ windowMs: 60 * 1000, max: 40 }));
 
 app.use(express.static('public'));
 app.use('/uploads', express.static('public/uploads'));
@@ -23,13 +23,13 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const upload = multer({
   storage: multer.diskStorage({
     destination: uploadDir,
-    filename: (_, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random()*1E9) + path.extname(file.originalname))
+    filename: (_, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname))
   }),
-  limits: { fileSize: 10*1024*1024 }
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
 app.post('/upload', upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ msg: 'No file uploaded' });
+  if (!req.file) return res.status(400).json({ msg: 'No file' });
   const url = `/uploads/${req.file.filename}`;
   res.json({ success: true, url, type: req.file.mimetype.startsWith('image') ? 'image' : 'audio' });
 });
@@ -47,7 +47,7 @@ function generateRoomId() {
 }
 
 io.on('connection', (socket) => {
-  console.log('Connected:', socket.id);
+  console.log('User connected:', socket.id);
 
   socket.on('create-room', ({ nickname, isGroup, expiresInMinutes }) => {
     let roomId;
@@ -100,7 +100,7 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('user-joined', { nickname, users: room.users });
   }
 
-  // Typing indicator
+  // Typing
   socket.on('typing', (isTyping) => {
     const roomId = socket.roomId;
     if (!roomId || !activeRooms[roomId]) return;
@@ -132,7 +132,7 @@ io.on('connection', (socket) => {
       text: text ? text.trim() : null,
       fileUrl,
       fileType,
-      time: new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       delivered: true,
       seen: false
     };
@@ -141,7 +141,7 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('receive-message', message);
   });
 
-  // Mark message as seen
+  // Mark as seen
   socket.on('message-seen', (messageId) => {
     const roomId = socket.roomId;
     if (!roomId || !activeRooms[roomId]) return;
@@ -152,7 +152,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Exit room (only this deletes the room)
+  // Exit room (only this deletes)
   socket.on('exit-room', () => {
     const roomId = socket.roomId;
     if (!roomId || !activeRooms[roomId]) return;
@@ -170,7 +170,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    // Room stays alive until Exit button is used
+    // Room stays alive until Exit button
   });
 });
 
