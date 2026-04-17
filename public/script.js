@@ -174,7 +174,7 @@ function sendMessage(e) {
 }
 
 function copyRoomLink() {
-    const link = `\( {window.location.origin}?room= \){currentRoomId}`;
+    const link = `${window.location.origin}?room=${currentRoomId}`;
     navigator.clipboard.writeText(link).then(() => showToast('✅ Link copied!', 2500));
 }
 
