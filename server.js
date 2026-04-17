@@ -158,9 +158,9 @@ io.on('connection', (socket) => {
 });
 
 // ==================== START SERVER ====================
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
 server.listen(PORT, () => {
     console.log(`\n✅ IP Chat Name is running!`);
-    console.log(`   🌐 Open: http://localhost:${PORT}`);
-    console.log(`   Two browser tabs = instant private chat!\n`);
+    console.log(`   🌐 Running on port: ${PORT}`);
 });
