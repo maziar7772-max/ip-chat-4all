@@ -22,9 +22,13 @@ body {
     font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     background: linear-gradient(135deg, #0a0a1f 0%, #1a0033 50%, #0a0a1f 100%);
     color: var(--text);
-    min-height: 100vh;
-    overflow: hidden;
-    background-attachment: fixed;
+
+    min-height: 100dvh; /* mobile friendly height */
+    
+    overflow-x: hidden; /* horizontal scroll band */
+    overflow-y: auto;   /* vertical scroll allow */
+
+    background-attachment: scroll; /* fixed hata diya (mobile issue fix) */
 }
 
 /* HEADER */
