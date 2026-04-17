@@ -1,7 +1,7 @@
 {
-  "name": "ip-chat-name-secure",
-  "version": "2.0.0",
-  "description": "Secure 2-person real-time chat with image & voice messages. Rooms delete permanently on disconnect.",
+  "name": "ip-chat-name",
+  "version": "2.2.0",
+  "description": "Secure chat with Group, Expiry, Typing, Seen, Dark/Light Mode",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
