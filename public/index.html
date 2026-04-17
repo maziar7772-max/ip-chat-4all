@@ -2,21 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>IP Chat Name</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
 </head>
-<body>
+<body data-theme="dark">
     <header class="header">
         <div class="logo">
             <span class="logo-icon">🔌</span>
             <h1>IP Chat Name</h1>
         </div>
-        <div id="header-room-info" class="room-info hidden">
-            <span class="room-label">Room</span>
-            <span id="room-id-display" class="room-id"></span>
-            <button onclick="copyRoomLink()" class="copy-btn">📋 Share</button>
+        <div class="header-right">
+            <button onclick="toggleTheme()" class="theme-btn">🌙</button>
+            <div id="header-room-info" class="room-info hidden">
+                <span id="room-id-display" class="room-id"></span>
+                <button onclick="copyRoomLink()" class="copy-btn">Share</button>
+                <button onclick="exitRoom()" class="exit-btn">Exit</button>
+            </div>
         </div>
     </header>
 
@@ -24,26 +27,40 @@
     <div id="home-view" class="view active">
         <div class="home-container">
             <div class="hero">
-                <div class="hero-badge">SECURE • 2 USERS • IMAGES & VOICE</div>
-                <h2 class="hero-title">Private Chat.<br>Now with Media.</h2>
-                <p class="hero-subtitle">Create or join a room.<br>Only 2 people. Room deletes forever when anyone leaves.</p>
+                <h2>Create or Join Secure Chat</h2>
+                <p>Private • Group • Self-destructing rooms</p>
             </div>
 
             <div class="card">
                 <div class="input-group">
-                    <label for="nickname-input">Your nickname</label>
-                    <input type="text" id="nickname-input" placeholder="e.g. Alex" maxlength="20">
+                    <label>Nickname</label>
+                    <input type="text" id="nickname-input" placeholder="Your name" maxlength="20">
                 </div>
 
-                <button onclick="createRoom()" class="btn-primary">🚀 Create New Room</button>
+                <div class="create-options">
+                    <button onclick="createRoom(false)" class="btn-primary">Private Chat (2 users)</button>
+                    <button onclick="createRoom(true)" class="btn-primary">Create Group</button>
+                </div>
 
-                <div class="divider"><span>OR</span></div>
+                <div class="expiry-selector">
+                    <label>Room expires in</label>
+                    <select id="expiry-time">
+                        <option value="15">15 minutes</option>
+                        <option value="30" selected>30 minutes</option>
+                        <option value="60">1 hour</option>
+                        <option value="180">3 hours</option>
+                        <option value="360">6 hours</option>
+                        <option value="1440">24 hours</option>
+                    </select>
+                </div>
+
+                <div class="divider">OR</div>
 
                 <div class="input-group">
-                    <label for="room-code-input">Enter Room ID</label>
-                    <div class="join-input-wrapper">
-                        <input type="text" id="room-code-input" placeholder="ABC12345" maxlength="8" style="text-transform:uppercase;">
-                        <button onclick="joinRoomFromHome()" class="btn-secondary">Join →</button>
+                    <label>Room ID</label>
+                    <div class="join-wrapper">
+                        <input type="text" id="room-code-input" placeholder="ABC12345" maxlength="8" style="text-transform:uppercase">
+                        <button onclick="joinRoomFromHome()" class="btn-join">Join</button>
                     </div>
                 </div>
             </div>
@@ -53,47 +70,41 @@
     <!-- Chat View -->
     <div id="chat-view" class="view hidden">
         <div class="chat-layout">
+            <!-- Sidebar -->
             <div class="participants-sidebar">
-                <h3 class="sidebar-title">Participants <span id="participant-count" class="count-badge">1/2</span></h3>
-                <div id="participants-list" class="participants-list"></div>
-                <div id="waiting-banner" class="waiting-banner">
-                    <div class="spinner"></div>
-                    <p>Waiting for friend...</p>
-                    <small>Share the room link</small>
+                <div class="sidebar-header">
+                    <h3>Participants <span id="participant-count" class="count-badge"></span></h3>
+                    <span id="online-status" class="online-status">● Online</span>
                 </div>
+                <div id="participants-list" class="participants-list"></div>
             </div>
 
+            <!-- Main Chat -->
             <div class="chat-main">
-                <div id="chat-messages" class="messages-container">
-                    <div id="empty-chat" class="empty-state">
-                        <div class="empty-icon">💬</div>
-                        <h3>Start chatting</h3>
-                    </div>
-                </div>
+                <div id="chat-messages" class="messages-container"></div>
+
+                <div class="typing-indicator" id="typing-indicator">Someone is typing...</div>
 
                 <div class="message-input-area">
                     <form id="message-form" onsubmit="sendMessage(event)">
-                        <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
-                        <button type="button" onclick="triggerImageUpload()" class="attach-btn" title="Send Image">📸</button>
-                        <button type="button" onclick="startVoiceRecording()" class="attach-btn" title="Record Voice">🎤</button>
-                        <button type="submit" class="send-btn">Send</button>
+                        <input type="text" id="message-input" placeholder="Type message..." autocomplete="off">
+                        <button type="button" onclick="triggerImageUpload()" class="attach-btn">📸</button>
+                        <button type="button" onclick="startVoiceRecording()" class="attach-btn">🎤</button>
+                        <button type="submit" class="send-btn">➤</button>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Hidden file input -->
     <input type="file" id="file-upload" accept="image/*,audio/*" style="display:none" onchange="handleFileSelect(event)">
 
     <!-- Modals -->
     <div id="join-modal" class="modal hidden">
         <div class="modal-content">
-            <h2>Joining Room <span id="modal-room-id" class="modal-room-id"></span></h2>
-            <div class="input-group">
-                <input type="text" id="modal-nickname" placeholder="Your nickname" maxlength="20">
-            </div>
-            <div class="modal-actions">
+            <h2>Join Room <span id="modal-room-id" class="room-id"></span></h2>
+            <input type="text" id="modal-nickname" placeholder="Your nickname" maxlength="20">
+            <div class="modal-buttons">
                 <button onclick="cancelJoinModal()" class="btn-secondary">Cancel</button>
                 <button onclick="confirmJoinFromModal()" class="btn-primary">Join</button>
             </div>
@@ -101,7 +112,7 @@
     </div>
 
     <div id="closed-modal" class="modal hidden">
-        <div class="modal-content error-modal">
+        <div class="modal-content">
             <h2>Room Closed</h2>
             <p id="closed-reason"></p>
             <button onclick="goBackToHome()" class="btn-primary">Back to Home</button>
@@ -112,4 +123,4 @@
 
     <script src="script.js"></script>
 </body>
-                    </html>
+                            </html>
