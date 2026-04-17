@@ -230,8 +230,20 @@ document.addEventListener('click', (e) => {
 });
 
 function copyRoomLink() {
-    const link = `\( {window.location.origin}?room= \){currentRoomId}`;
-    navigator.clipboard.writeText(link).then(() => showToast('✅ Link copied!'));
+    if (!currentRoomId) {
+        return showToast('❌ No room to share');
+    }
+
+    const link = `${window.location.origin}?room=${currentRoomId}`;
+
+    navigator.clipboard.writeText(link)
+        .then(() => {
+            showToast('✅ Link copied!');
+        })
+        .catch(() => {
+            showToast('❌ Failed to copy link');
+        });
+}
 }
 
 function showClosedModal(reason) {
