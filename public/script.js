@@ -1,15 +1,15 @@
-// public/script.js - Secure version with media support
+// public/script.js - Final with Exit Button
 let socket;
 let currentRoomId = null;
 let myNickname = '';
 let participants = [];
 let messages = [];
+let isGroup = false;
 let mediaRecorder = null;
 let audioChunks = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     socket = io();
-
     setupSocketListeners();
 
     const params = new URLSearchParams(window.location.search);
@@ -25,25 +25,29 @@ function setupSocketListeners() {
         myNickname = data.myNickname;
         participants = data.users;
         messages = data.messages || [];
+        isGroup = data.isGroup;
 
         history.pushState({}, '', `?room=${currentRoomId}`);
         switchToChatView();
         renderParticipants();
         renderMessages();
-        if (participants.length === 2) document.getElementById('waiting-banner').classList.add('hidden');
     });
 
     socket.on('user-joined', (data) => {
         participants = data.users;
         renderParticipants();
-        document.getElementById('waiting-banner').classList.add('hidden');
+    });
+
+    socket.on('user-left', (data) => {
+        participants = data.users;
+        renderParticipants();
+        showToast(data.message || 'Someone left the room');
     });
 
     socket.on('receive-message', (msg) => {
         messages.push(msg);
         renderMessages();
-        const container = document.getElementById('chat-messages');
-        container.scrollTop = container.scrollHeight;
+        document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
     });
 
     socket.on('room-closed', (data) => {
@@ -55,10 +59,18 @@ function setupSocketListeners() {
     });
 }
 
-function createRoom() {
+function createRoom(group) {
     const nickname = document.getElementById('nickname-input').value.trim();
     if (!nickname) return showToast('Please enter a nickname');
-    socket.emit('create-room', { nickname });
+
+    const expirySelect = document.getElementById('expiry-time');
+    const expiresInMinutes = parseInt(expirySelect.value);
+
+    socket.emit('create-room', { 
+        nickname, 
+        isGroup: group, 
+        expiresInMinutes 
+    });
 }
 
 function joinRoomFromHome() {
@@ -95,8 +107,7 @@ function switchToChatView() {
 function renderParticipants() {
     const container = document.getElementById('participants-list');
     container.innerHTML = '';
-    document.getElementById('participant-count').textContent = `${participants.length}/2`;
-
+    document.getElementById('participant-count').textContent = `${participants.length}${isGroup ? '+' : '/2'}`;
     participants.forEach(user => {
         const isMe = user.nickname === myNickname;
         const div = document.createElement('div');
@@ -137,7 +148,6 @@ function renderMessages() {
                 content += `<audio controls src="${msg.fileUrl}" class="chat-audio"></audio>`;
             }
         }
-
         div.innerHTML = content;
         container.appendChild(div);
     });
@@ -162,25 +172,15 @@ function triggerImageUpload() {
 function handleFileSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
-
     const formData = new FormData();
     formData.append('file', file);
-
-    fetch('/upload', {
-        method: 'POST',
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            socket.emit('send-message', {
-                text: '',
-                fileUrl: data.url,
-                fileType: data.type
-            });
-        }
-    })
-    .catch(() => showToast('Upload failed'));
+    fetch('/upload', { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                socket.emit('send-message', { text: '', fileUrl: data.url, fileType: data.type });
+            }
+        });
 }
 
 async function startVoiceRecording() {
@@ -194,40 +194,27 @@ async function startVoiceRecording() {
             const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
             const formData = new FormData();
             formData.append('file', audioBlob, 'voice.ogg');
-
             fetch('/upload', { method: 'POST', body: formData })
                 .then(res => res.json())
                 .then(data => {
-                    if (data.success) {
-                        socket.emit('send-message', {
-                            text: '',
-                            fileUrl: data.url,
-                            fileType: 'audio'
-                        });
-                    }
+                    if (data.success) socket.emit('send-message', { text: '', fileUrl: data.url, fileType: 'audio' });
                 });
             stream.getTracks().forEach(track => track.stop());
         };
 
         mediaRecorder.start();
         showToast('🎤 Recording... Click again to stop', 15000);
-
-        // Auto stop after 30 seconds for safety
-        setTimeout(() => {
-            if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
-        }, 30000);
-
     } catch (err) {
-        showToast('Microphone access denied or not available');
+        showToast('Microphone access denied');
     }
 }
 
-// Click again to stop recording (simple toggle)
-document.addEventListener('click', (e) => {
-    if (e.target.textContent.includes('🎤') && mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
+function exitRoom() {
+    if (confirm("Are you sure you want to exit? The room will be permanently deleted if you're the last user.")) {
+        socket.emit('exit-room');
+        goBackToHome();
     }
-});
+}
 
 function copyRoomLink() {
     if (!currentRoomId) {
@@ -244,7 +231,7 @@ function copyRoomLink() {
             showToast('❌ Failed to copy link');
         });
 }
-
+}
 
 function showClosedModal(reason) {
     document.getElementById('closed-reason').innerHTML = reason || 'Room has been permanently deleted.';
@@ -257,6 +244,8 @@ function goBackToHome() {
     document.getElementById('home-view').classList.remove('hidden');
     document.getElementById('header-room-info').classList.add('hidden');
     currentRoomId = null;
+    participants = [];
+    messages = [];
 }
 
 function showToast(msg, timeout = 3000) {
@@ -264,4 +253,4 @@ function showToast(msg, timeout = 3000) {
     toast.textContent = msg;
     toast.classList.remove('hidden');
     setTimeout(() => toast.classList.add('hidden'), timeout);
-}
+            }
